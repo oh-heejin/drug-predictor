@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>신약개발 가능성 예측기</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f0; color: #1a1a18; min-height: 100vh; padding: 2rem 1rem; }
+.container { max-width: 900px; margin: 0 auto; }
+h1 { font-size: 20px; font-weight: 500; margin-bottom: 4px; }
+.subtitle { font-size: 13px; color: #888780; margin-bottom: 2rem; }
+.card { background: #fff; border: 0.5px solid #d3d1c7; border-radius: 12px; padding: 1.25rem; margin-bottom: 1.25rem; }
+.section-title { font-size: 13px; font-weight: 500; color: #5f5e5a; margin-bottom: 12px; }
+.search-row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+.search-row input { flex: 1; min-width: 180px; font-size: 14px; padding: 9px 12px; border: 0.5px solid #b4b2a9; border-radius: 8px; background: #fff; color: #1a1a18; }
+.search-row input:focus { outline: none; border-color: #378ADD; }
+.btn-search { padding: 9px 18px; font-size: 14px; font-weight: 500; background: #1a1a18; color: #fff; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+.btn-search:hover { background: #378ADD; }
+.btn-predict { width: 100%; padding: 10px; font-size: 14px; font-weight: 500; background: #378ADD; color: #fff; border: none; border-radius: 8px; cursor: pointer; margin-top: 8px; }
+.btn-predict:hover { background: #185FA5; }
+.fetched-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 12px 0; }
+.fetched-item { background: #f5f5f0; border-radius: 8px; padding: 10px 12px; }
+.fetched-label { font-size: 11px; color: #888780; margin-bottom: 2px; }
+.fetched-value { font-size: 15px; font-weight: 500; }
+.pka-row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin-top: 8px; }
+.pka-row > div { flex: 1; min-width: 140px; }
+.pka-row label { font-size: 12px; color: #888780; display: block; margin-bottom: 4px; }
+.pka-row input, .pka-row select { width: 100%; font-size: 14px; padding: 8px 10px; border: 0.5px solid #b4b2a9; border-radius: 8px; background: #fff; color: #1a1a18; }
+.pka-row input:focus, .pka-row select:focus { outline: none; border-color: #378ADD; }
+.status { font-size: 13px; color: #888780; margin-top: 8px; min-height: 20px; }
+.status.loading { color: #378ADD; }
+.status.error { color: #A32D2D; }
+.status.success { color: #27500A; }
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 1.25rem; }
+.metric { background: #f5f5f0; border-radius: 8px; padding: 12px; }
+.metric-label { font-size: 11px; color: #888780; margin-bottom: 4px; }
+.metric-value { font-size: 20px; font-weight: 500; }
+.score-bar-wrap { background: #f1efe8; border-radius: 99px; height: 12px; margin: 8px 0; }
+.score-bar { height: 12px; border-radius: 99px; transition: width 0.6s; }
+.verdict { font-size: 14px; font-weight: 500; margin-top: 8px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { font-size: 11px; font-weight: 500; color: #888780; text-align: left; padding: 6px 8px; border-bottom: 0.5px solid #d3d1c7; }
+td { padding: 8px 8px; border-bottom: 0.5px solid #f1efe8; }
+tr:last-child td { border-bottom: none; }
+.badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 99px; font-weight: 500; }
+.good { background: #EAF3DE; color: #27500A; }
+.bad { background: #FCEBEB; color: #791F1F; }
+.ok { background: #E6F1FB; color: #0C447C; }
+.over { background: #FAEEDA; color: #633806; }
+.chart-wrap { position: relative; width: 100%; height: 260px; }
+.legend { display: flex; gap: 16px; font-size: 12px; color: #888780; margin-bottom: 10px; }
+.legend span { display: flex; align-items: center; gap: 5px; }
+.dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.preset-btn { display: inline-block; padding: 4px 12px; font-size: 12px; background: #f1efe8; color: #1a1a18; border: 0.5px solid #d3d1c7; border-radius: 99px; cursor: pointer; margin: 3px; }
+.preset-btn:hover { background: #E6F1FB; border-color: #378ADD; color: #0C447C; }
+.pass { color: #27500A; } .fail { color: #791F1F; }
+.divider { border: none; border-top: 0.5px solid #f1efe8; margin: 12px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>신약개발 가능성 예측기</h1>
+  <p class="subtitle">약물 이름 검색 → PubChem 자동 데이터 수집 → pH-dependent logD 분석 → 신약 가능성 점수 산출</p>
+
+  <div class="card">
+    <div class="section-title">기존 데이터 약물 (클릭하면 자동 입력)</div>
+    <div id="presetBtns"></div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">약물 검색</div>
+    <div class="search-row">
+      <input id="searchInput" placeholder="약물 이름 입력 (영문) — 예: aspirin, caffeine" onkeydown="if(event.key==='Enter') fetchDrug()" />
+      <button class="btn-search" onclick="fetchDrug()">PubChem 검색</button>
+    </div>
+    <div class="status" id="status"></div>
+
+    <div id="fetchedSection" style="display:none;">
+      <hr class="divider">
+      <div class="fetched-row" id="fetchedRow"></div>
+      <div class="pka-row">
+        <div>
+          <label>pKa1 <span style="color:#E24B4A;">*필수 (PKCSm에서 확인)</span></label>
+          <input id="pKa1" type="number" step="0.01" placeholder="예: 4.5" />
+        </div>
+        <div>
+          <label>pKa2 (양쪽성이면 입력, 아니면 비워두기)</label>
+          <input id="pKa2" type="number" step="0.01" placeholder="없으면 비워두세요" />
+        </div>
+        <div>
+          <label>약물 분류</label>
+          <select id="drugType">
+            <option value="0">산성 (COOH, phenol 등)</option>
+            <option value="1">염기성 (amine 등)</option>
+            <option value="2">양쪽성 (amphoteric)</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn-predict" onclick="runPredict()">예측 실행</button>
+    </div>
+  </div>
+
+  <div class="card" id="resultCard" style="display:none;">
+    <div class="section-title">예측 결과 — <span id="resultName"></span></div>
+    <div class="metrics">
+      <div class="metric"><div class="metric-label">logP</div><div class="metric-value" id="r-logp">—</div></div>
+      <div class="metric"><div class="metric-label">pKa</div><div class="metric-value" id="r-pka">—</div></div>
+      <div class="metric"><div class="metric-label">분자량</div><div class="metric-value" id="r-mw">—</div></div>
+      <div class="metric"><div class="metric-label">HBD / HBA</div><div class="metric-value" id="r-hb">—</div></div>
+      <div class="metric"><div class="metric-label">Lipinski Rule</div><div class="metric-value" style="font-size:15px;margin-top:4px;" id="r-lip">—</div></div>
+    </div>
+    <div>
+      <div style="font-size:12px;color:#888780;margin-bottom:6px;">신약개발 가능성 점수</div>
+      <div class="score-bar-wrap"><div class="score-bar" id="scoreBar"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#888780;"><span>0%</span><span>50%</span><span>100%</span></div>
+      <div class="verdict" id="verdict"></div>
+    </div>
+  </div>
+
+  <div class="card" id="routeCard" style="display:none;">
+    <div class="section-title">생체 부위별 분석</div>
+    <table>
+      <thead><tr><th>부위</th><th>pH</th><th>logP</th><th>logD</th><th>이온화율</th><th>막투과성</th></tr></thead>
+      <tbody id="routeTable"></tbody>
+    </table>
+  </div>
+
+  <div class="card" id="chartCard" style="display:none;">
+    <div class="section-title">pH에 따른 logD 곡선</div>
+    <div class="legend">
+      <span><span class="dot" style="background:#378ADD;"></span>logD (pH 반영)</span>
+      <span><span class="dot" style="background:#E24B4A;height:3px;border-radius:0;margin-top:3px;"></span>logP (기준)</span>
+    </div>
+    <div class="chart-wrap"><canvas id="logdChart" role="img" aria-label="pH에 따른 logD 곡선">logD 변화 곡선</canvas></div>
+  </div>
+</div>
+
+<script>
+const PRESETS = [
+  {name:'Acetaminophen', logP:0.46, pKa1:9.38, pKa2:null, MW:151.2, HBD:2, HBA:2, type:0},
+  {name:'Acetazolamide', logP:-0.26, pKa1:7.4, pKa2:null, MW:222.2, HBD:2, HBA:6, type:0},
+  {name:'Ibuprofen', logP:3.97, pKa1:4.41, pKa2:null, MW:206.3, HBD:1, HBA:2, type:0},
+  {name:'Diclofenac', logP:4.51, pKa1:4.03, pKa2:null, MW:296.2, HBD:2, HBA:3, type:0},
+  {name:'Salicylic acid', logP:2.24, pKa1:3.0, pKa2:null, MW:138.1, HBD:2, HBA:3, type:0},
+  {name:'Mesalamine', logP:-0.37, pKa1:2.72, pKa2:5.84, MW:153.1, HBD:3, HBA:4, type:2},
+  {name:'Warfarin', logP:2.70, pKa1:5.1, pKa2:null, MW:308.3, HBD:1, HBA:4, type:0},
+  {name:'Methotrexate', logP:-1.85, pKa1:4.7, pKa2:null, MW:454.4, HBD:5, HBA:12, type:0},
+  {name:'Propranolol', logP:3.48, pKa1:9.42, pKa2:null, MW:259.3, HBD:2, HBA:3, type:1},
+  {name:'Diphenhydramine', logP:3.27, pKa1:9.0, pKa2:null, MW:255.4, HBD:1, HBA:2, type:1},
+  {name:'Lidocaine', logP:2.44, pKa1:7.9, pKa2:null, MW:234.3, HBD:1, HBA:2, type:1},
+  {name:'Timolol', logP:1.83, pKa1:9.2, pKa2:null, MW:316.4, HBD:3, HBA:5, type:1},
+  {name:'Amphetamine', logP:1.76, pKa1:9.9, pKa2:null, MW:135.2, HBD:2, HBA:1, type:1},
+  {name:'Imipramine', logP:4.28, pKa1:9.4, pKa2:null, MW:280.4, HBD:0, HBA:1, type:1},
+  {name:'Chloroquine', logP:4.63, pKa1:8.4, pKa2:10.0, MW:319.9, HBD:1, HBA:3, type:2},
+];
+
+const BIO_SITES = [
+  {site:'위', ph:1.5},{site:'소장', ph:6.5},{site:'혈액', ph:7.4},
+  {site:'간', ph:7.0},{site:'종양', ph:6.5},{site:'뇌', ph:7.3},
+  {site:'리소좀', ph:4.8},{site:'눈', ph:7.4},{site:'피부', ph:5.5},
+];
+
+let currentDrug = {};
+let chart = null;
+
+const presetDiv = document.getElementById('presetBtns');
+PRESETS.forEach(p => {
+  const btn = document.createElement('button');
+  btn.className = 'preset-btn';
+  btn.textContent = p.name;
+  btn.onclick = () => loadPreset(p);
+  presetDiv.appendChild(btn);
+});
+
+function loadPreset(p) {
+  currentDrug = { name:p.name, logP:p.logP, MW:p.MW, HBD:p.HBD, HBA:p.HBA };
+  document.getElementById('pKa1').value = p.pKa1;
+  document.getElementById('pKa2').value = p.pKa2 || '';
+  document.getElementById('drugType').value = p.type;
+  document.getElementById('searchInput').value = p.name;
+  showFetched();
+  runPredict();
+}
+
+function showFetched() {
+  const row = document.getElementById('fetchedRow');
+  row.innerHTML = '';
+  [
+    {label:'약물명', val: currentDrug.name},
+    {label:'logP', val: currentDrug.logP != null ? currentDrug.logP.toFixed(2) : '—'},
+    {label:'분자량 (MW)', val: currentDrug.MW != null ? currentDrug.MW.toFixed(1) : '—'},
+    {label:'HBD', val: currentDrug.HBD != null ? currentDrug.HBD : '—'},
+    {label:'HBA', val: currentDrug.HBA != null ? currentDrug.HBA : '—'},
+  ].forEach(item => {
+    row.innerHTML += `<div class="fetched-item"><div class="fetched-label">${item.label}</div><div class="fetched-value">${item.val}</div></div>`;
+  });
+  document.getElementById('fetchedSection').style.display = 'block';
+}
+
+async function fetchDrug() {
+  const query = document.getElementById('searchInput').value.trim();
+  if (!query) return;
+  const status = document.getElementById('status');
+  status.className = 'status loading';
+  status.textContent = 'PubChem에서 데이터 가져오는 중...';
+  document.getElementById('fetchedSection').style.display = 'none';
+
+  try {
+    const cidRes = await fetch(`https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/${encodeURIComponent(query)}/cids/JSON`);
+    if (!cidRes.ok) throw new Error('약물을 찾을 수 없습니다. 영문 이름으로 다시 시도해보세요.');
+    const cidData = await cidRes.json();
+    if (!cidData || !cidData.IdentifierList || !cidData.IdentifierList.CIDs || cidData.IdentifierList.CIDs.length === 0) {
+      throw new Error('약물을 찾을 수 없습니다. 영문 이름을 확인해주세요.');
+    }
+    const cid = cidData.IdentifierList.CIDs[0];
+
+    const propRes = await fetch(`https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cid}/property/MolecularWeight,XLogP,HBondDonorCount,HBondAcceptorCount,IUPACName/JSON`);
+    const propData = await propRes.json();
+    const props = propData.PropertyTable.Properties[0];
+
+    currentDrug = {
+      name: query,
+      logP: props.XLogP != null ? props.XLogP : null,
+      MW: props.MolecularWeight != null ? parseFloat(props.MolecularWeight) : null,
+      HBD: props.HBondDonorCount != null ? props.HBondDonorCount : null,
+      HBA: props.HBondAcceptorCount != null ? props.HBondAcceptorCount : null,
+    };
+
+    showFetched();
+    status.className = 'status success';
+    status.textContent = `검색 완료. pKa를 입력한 뒤 예측 실행 버튼을 눌러주세요.`;
+  } catch(e) {
+    status.className = 'status error';
+    status.textContent = e.message || '검색 실패. 인터넷 연결 확인 후 다시 시도해주세요.';
+  }
+}
+
+function calcLogD(logP, pKa1, pKa2, type, ph) {
+  if (type == 0) return logP - Math.log10(1 + Math.pow(10, ph - pKa1));
+  if (type == 1) return logP - Math.log10(1 + Math.pow(10, pKa1 - ph));
+  if (type == 2) return logP - Math.log10(1 + Math.pow(10, ph - pKa1) + Math.pow(10, (pKa2||pKa1) - ph));
+  return logP;
+}
+
+function calcIon(pKa1, type, ph) {
+  if (type == 0) return (1 / (1 + Math.pow(10, -(ph - pKa1)))) * 100;
+  if (type == 1) return (1 / (1 + Math.pow(10, ph - pKa1))) * 100;
+  return 50;
+}
+
+function scoreLogD(ld) {
+  if (ld >= 1 && ld <= 3) return 1.0;
+  if (ld >= 0 && ld < 1) return 0.6;
+  if (ld > 3 && ld <= 5) return 0.5;
+  return 0.1;
+}
+
+function calcScore(logP, pKa1, pKa2, MW, HBD, HBA, type) {
+  let s = 0, total = 0;
+  const lip = (logP <= 5 && MW <= 500 && HBD <= 5 && HBA <= 10);
+  s += lip ? 30 : 0; total += 30;
+  [7.4, 6.5, 7.3].forEach(ph => {
+    const ld = calcLogD(logP, pKa1, pKa2, type, ph);
+    s += scoreLogD(ld) * 20; total += 20;
+  });
+  s += (logP >= 0 && logP <= 5) ? 10 : 0; total += 10;
+  return Math.round((s / total) * 100);
+}
+
+function perm(ld) {
+  if (ld >= 1 && ld <= 3) return {label:'양호', cls:'good'};
+  if (ld < 0) return {label:'불량', cls:'bad'};
+  if (ld > 3) return {label:'과친유성', cls:'over'};
+  return {label:'보통', cls:'ok'};
+}
+
+function runPredict() {
+  const pKa1v = document.getElementById('pKa1').value;
+  if (!pKa1v) { alert('pKa1 값을 입력해주세요.'); return; }
+  const pKa1 = parseFloat(pKa1v);
+  const pKa2v = document.getElementById('pKa2').value;
+  const pKa2 = pKa2v ? parseFloat(pKa2v) : null;
+  const type = parseInt(document.getElementById('drugType').value);
+  const logP = currentDrug.logP != null ? currentDrug.logP : 0;
+  const MW = currentDrug.MW != null ? currentDrug.MW : 0;
+  const HBD = currentDrug.HBD != null ? currentDrug.HBD : 0;
+  const HBA = currentDrug.HBA != null ? currentDrug.HBA : 0;
+  const lip = (logP <= 5 && MW <= 500 && HBD <= 5 && HBA <= 10);
+  const score = calcScore(logP, pKa1, pKa2, MW, HBD, HBA, type);
+
+  document.getElementById('resultCard').style.display = 'block';
+  document.getElementById('routeCard').style.display = 'block';
+  document.getElementById('chartCard').style.display = 'block';
+  document.getElementById('resultName').textContent = currentDrug.name;
+  document.getElementById('r-logp').textContent = logP.toFixed(2);
+  document.getElementById('r-pka').textContent = pKa2 ? `${pKa1} / ${pKa2}` : pKa1;
+  document.getElementById('r-mw').textContent = MW.toFixed(1);
+  document.getElementById('r-hb').textContent = `${HBD} / ${HBA}`;
+  document.getElementById('r-lip').innerHTML = lip ? '<span class="pass">통과</span>' : '<span class="fail">실패</span>';
+
+  const bar = document.getElementById('scoreBar');
+  bar.style.width = score + '%';
+  bar.style.background = score >= 70 ? '#378ADD' : score >= 40 ? '#EF9F27' : '#E24B4A';
+
+  const v = document.getElementById('verdict');
+  if (score >= 70) { v.style.color='#185FA5'; v.textContent=`가능성 점수: ${score}% — 개발 가능성 높음`; }
+  else if (score >= 40) { v.style.color='#854F0B'; v.textContent=`가능성 점수: ${score}% — 추가 검토 필요`; }
+  else { v.style.color='#A32D2D'; v.textContent=`가능성 점수: ${score}% — 개발 가능성 낮음`; }
+
+  const tbody = document.getElementById('routeTable');
+  tbody.innerHTML = '';
+  BIO_SITES.forEach(r => {
+    const ld = calcLogD(logP, pKa1, pKa2, type, r.ph);
+    const ion = calcIon(pKa1, type, r.ph);
+    const p = perm(ld);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${r.site}</td>
+      <td>${r.ph.toFixed(1)}</td>
+      <td style="color:#888780">${logP.toFixed(2)}</td>
+      <td style="font-weight:500">${ld.toFixed(2)}</td>
+      <td>${ion.toFixed(1)}%</td>
+      <td><span class="badge ${p.cls}">${p.label}</span></td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  const pHs = [], logDs = [];
+  for (let ph = 1; ph <= 10; ph += 0.1) {
+    pHs.push(ph.toFixed(1));
+    logDs.push(parseFloat(calcLogD(logP, pKa1, pKa2, type, ph).toFixed(3)));
+  }
+
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById('logdChart'), {
+    type: 'line',
+    data: {
+      labels: pHs,
+      datasets: [
+        { label:'logD', data:logDs, borderColor:'#378ADD', borderWidth:2, pointRadius:0, tension:0.3, fill:false },
+        { label:'logP', data:Array(pHs.length).fill(parseFloat(logP.toFixed(2))), borderColor:'#E24B4A', borderWidth:1.5, borderDash:[5,4], pointRadius:0, fill:false }
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins: {
+        legend:{display:false},
+        tooltip:{callbacks:{
+          title:i=>`pH ${i[0].label}`,
+          label:i=>`${i.dataset.label}: ${i.parsed.y.toFixed(2)}`
+        }}
+      },
+      scales: {
+        x:{ticks:{maxTicksLimit:10,color:'#888780',font:{size:11}},grid:{color:'rgba(136,135,128,0.12)'},title:{display:true,text:'pH',color:'#888780',font:{size:12}}},
+        y:{ticks:{color:'#888780',font:{size:11},callback:v=>v.toFixed(1)},grid:{color:'rgba(136,135,128,0.12)'},title:{display:true,text:'logD / logP',color:'#888780',font:{size:12}}}
+      }
+    }
+  });
+}
+</script>
+</body>
+</html>
