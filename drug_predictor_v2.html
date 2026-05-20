@@ -120,7 +120,8 @@ tr:last-child td { border-bottom: none; }
   </div>
 
   <div class="card" id="routeCard" style="display:none;">
-    <div class="section-title">생체 부위별 분석</div>
+    <div class="section-title">투여 경로별 분석</div>
+    <div style="font-size:12px;color:#888780;margin-bottom:10px;" id="routeLabel"></div>
     <table>
       <thead><tr><th>부위</th><th>pH</th><th>logP</th><th>logD</th><th>이온화율</th><th>막투과성</th></tr></thead>
       <tbody id="routeTable"></tbody>
@@ -139,27 +140,41 @@ tr:last-child td { border-bottom: none; }
 
 <script>
 const PRESETS = [
-  {name:'Acetaminophen', logP:0.46, pKa1:9.38, pKa2:null, MW:151.2, HBD:2, HBA:2, type:0},
-  {name:'Acetazolamide', logP:-0.26, pKa1:7.4, pKa2:null, MW:222.2, HBD:2, HBA:6, type:0},
-  {name:'Ibuprofen', logP:3.97, pKa1:4.41, pKa2:null, MW:206.3, HBD:1, HBA:2, type:0},
-  {name:'Diclofenac', logP:4.51, pKa1:4.03, pKa2:null, MW:296.2, HBD:2, HBA:3, type:0},
-  {name:'Salicylic acid', logP:2.24, pKa1:3.0, pKa2:null, MW:138.1, HBD:2, HBA:3, type:0},
-  {name:'Mesalamine', logP:-0.37, pKa1:2.72, pKa2:5.84, MW:153.1, HBD:3, HBA:4, type:2},
-  {name:'Warfarin', logP:2.70, pKa1:5.1, pKa2:null, MW:308.3, HBD:1, HBA:4, type:0},
-  {name:'Methotrexate', logP:-1.85, pKa1:4.7, pKa2:null, MW:454.4, HBD:5, HBA:12, type:0},
-  {name:'Propranolol', logP:3.48, pKa1:9.42, pKa2:null, MW:259.3, HBD:2, HBA:3, type:1},
-  {name:'Diphenhydramine', logP:3.27, pKa1:9.0, pKa2:null, MW:255.4, HBD:1, HBA:2, type:1},
-  {name:'Lidocaine', logP:2.44, pKa1:7.9, pKa2:null, MW:234.3, HBD:1, HBA:2, type:1},
-  {name:'Timolol', logP:1.83, pKa1:9.2, pKa2:null, MW:316.4, HBD:3, HBA:5, type:1},
-  {name:'Amphetamine', logP:1.76, pKa1:9.9, pKa2:null, MW:135.2, HBD:2, HBA:1, type:1},
-  {name:'Imipramine', logP:4.28, pKa1:9.4, pKa2:null, MW:280.4, HBD:0, HBA:1, type:1},
-  {name:'Chloroquine', logP:4.63, pKa1:8.4, pKa2:10.0, MW:319.9, HBD:1, HBA:3, type:2},
+  {name:'Acetaminophen', logP:0.46, pKa1:9.38, pKa2:null, MW:151.2, HBD:2, HBA:2, type:0,
+    route:[{site:'위',ph:1.5},{site:'소장',ph:6.5},{site:'혈액',ph:7.4}]},
+  {name:'Acetazolamide', logP:-0.26, pKa1:7.4, pKa2:null, MW:222.2, HBD:2, HBA:6, type:0,
+    route:[{site:'위',ph:1.5},{site:'소장',ph:6.5},{site:'혈액',ph:7.4}]},
+  {name:'Ibuprofen', logP:3.97, pKa1:4.41, pKa2:null, MW:206.3, HBD:1, HBA:2, type:0,
+    route:[{site:'위',ph:1.5},{site:'소장',ph:6.5},{site:'혈액',ph:7.4}]},
+  {name:'Diclofenac', logP:4.51, pKa1:4.03, pKa2:null, MW:296.2, HBD:2, HBA:3, type:0,
+    route:[{site:'피부표면',ph:4.5},{site:'표피',ph:5.5},{site:'진피',ph:7.2}]},
+  {name:'Salicylic acid', logP:2.24, pKa1:3.0, pKa2:null, MW:138.1, HBD:2, HBA:3, type:0,
+    route:[{site:'피부표면',ph:4.5},{site:'표피',ph:5.5},{site:'진피',ph:7.2}]},
+  {name:'Mesalamine', logP:-0.37, pKa1:2.72, pKa2:5.84, MW:153.1, HBD:3, HBA:4, type:2,
+    route:[{site:'위',ph:1.5},{site:'소장',ph:6.5},{site:'대장',ph:6.5}]},
+  {name:'Warfarin', logP:2.70, pKa1:5.1, pKa2:null, MW:308.3, HBD:1, HBA:4, type:0,
+    route:[{site:'위',ph:1.5},{site:'소장',ph:6.5},{site:'혈액',ph:7.4},{site:'간',ph:7.0}]},
+  {name:'Methotrexate', logP:-1.85, pKa1:4.7, pKa2:null, MW:454.4, HBD:5, HBA:12, type:0,
+    route:[{site:'혈액',ph:7.4},{site:'종양',ph:6.5}]},
+  {name:'Propranolol', logP:3.48, pKa1:9.42, pKa2:null, MW:259.3, HBD:2, HBA:3, type:1,
+    route:[{site:'위',ph:1.5},{site:'소장상부',ph:6.5},{site:'소장하부',ph:7.6},{site:'간문맥',ph:7.4},{site:'혈액',ph:7.4}]},
+  {name:'Diphenhydramine', logP:3.27, pKa1:9.0, pKa2:null, MW:255.4, HBD:1, HBA:2, type:1,
+    route:[{site:'위',ph:1.5},{site:'소장',ph:6.5},{site:'혈액',ph:7.4},{site:'뇌',ph:7.3}]},
+  {name:'Lidocaine', logP:2.44, pKa1:7.9, pKa2:null, MW:234.3, HBD:1, HBA:2, type:1,
+    route:[{site:'위',ph:1.5},{site:'소장',ph:6.5},{site:'문맥',ph:7.4},{site:'간',ph:7.2}]},
+  {name:'Timolol', logP:1.83, pKa1:9.2, pKa2:null, MW:316.4, HBD:3, HBA:5, type:1,
+    route:[{site:'점안액',ph:7.0},{site:'눈물층',ph:7.4},{site:'각막',ph:7.4}]},
+  {name:'Amphetamine', logP:1.76, pKa1:9.9, pKa2:null, MW:135.2, HBD:2, HBA:1, type:1,
+    route:[{site:'위',ph:1.5},{site:'소장상부',ph:6.5},{site:'소장하부',ph:7.6},{site:'혈액',ph:7.4},{site:'뇌',ph:7.3}]},
+  {name:'Imipramine', logP:4.28, pKa1:9.4, pKa2:null, MW:280.4, HBD:0, HBA:1, type:1,
+    route:[{site:'위',ph:1.5},{site:'소장상부',ph:6.5},{site:'소장하부',ph:7.6},{site:'혈액',ph:7.4},{site:'뇌',ph:7.3}]},
+  {name:'Chloroquine', logP:4.63, pKa1:8.4, pKa2:10.0, MW:319.9, HBD:1, HBA:3, type:2,
+    route:[{site:'위',ph:1.5},{site:'소장상부',ph:6.5},{site:'소장하부',ph:7.6},{site:'혈액',ph:7.4},{site:'리소좀',ph:4.8}]},
 ];
 
-const BIO_SITES = [
-  {site:'위', ph:1.5},{site:'소장', ph:6.5},{site:'혈액', ph:7.4},
-  {site:'간', ph:7.0},{site:'종양', ph:6.5},{site:'뇌', ph:7.3},
-  {site:'리소좀', ph:4.8},{site:'눈', ph:7.4},{site:'피부', ph:5.5},
+// 새 약물 기본 경로 (경구 투여 기준)
+const DEFAULT_ROUTE = [
+  {site:'위',ph:1.5},{site:'소장',ph:6.5},{site:'혈액',ph:7.4}
 ];
 
 let currentDrug = {};
@@ -175,7 +190,7 @@ PRESETS.forEach(p => {
 });
 
 function loadPreset(p) {
-  currentDrug = { name:p.name, logP:p.logP, MW:p.MW, HBD:p.HBD, HBA:p.HBA };
+  currentDrug = { name:p.name, logP:p.logP, MW:p.MW, HBD:p.HBD, HBA:p.HBA, route:p.route };
   document.getElementById('pKa1').value = p.pKa1;
   document.getElementById('pKa2').value = p.pKa2 || '';
   document.getElementById('drugType').value = p.type;
@@ -306,15 +321,23 @@ function runPredict() {
   else if (score >= 40) { v.style.color='#854F0B'; v.textContent=`가능성 점수: ${score}% — 추가 검토 필요`; }
   else { v.style.color='#A32D2D'; v.textContent=`가능성 점수: ${score}% — 개발 가능성 낮음`; }
 
+  // 약물별 투여 경로 사용 (없으면 기본 경구 경로)
+  const activeRoute = currentDrug.route || DEFAULT_ROUTE;
+  const routeLabel = document.getElementById('routeLabel');
+  if (routeLabel) {
+    routeLabel.textContent = activeRoute.map(r => r.site).join(' → ');
+  }
+
   const tbody = document.getElementById('routeTable');
   tbody.innerHTML = '';
-  BIO_SITES.forEach(r => {
+  activeRoute.forEach((r, idx) => {
     const ld = calcLogD(logP, pKa1, pKa2, type, r.ph);
     const ion = calcIon(pKa1, type, r.ph);
     const p = perm(ld);
+    const isTarget = idx === activeRoute.length - 1;
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${r.site}</td>
+      <td>${isTarget ? '<strong>' + r.site + ' ★표적</strong>' : r.site}</td>
       <td>${r.ph.toFixed(1)}</td>
       <td style="color:#888780">${logP.toFixed(2)}</td>
       <td style="font-weight:500">${ld.toFixed(2)}</td>
