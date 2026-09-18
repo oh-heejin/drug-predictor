@@ -178,7 +178,7 @@ const PRESETS = [
   {name:'Salicylic acid', logP:2.24, pKa1:3.0, pKa2:null, MW:138.1, HBD:2, HBA:3, type:0,
     route:[{site:'피부표면',ph:4.5},{site:'표피',ph:5.5},{site:'진피',ph:7.2}]},
   {name:'Mesalamine', logP:-0.37, pKa1:2.72, pKa2:5.84, MW:153.1, HBD:3, HBA:4, type:2,
-    route:[{site:'위',ph:1.5},{site:'소장',ph:6.5},{site:'대장',ph:6.5}]},
+    route:[{site:'위',ph:1.5},{site:'소장',ph:6.5},{site:'대장',ph:6.8}]},
   {name:'Warfarin', logP:2.70, pKa1:5.1, pKa2:null, MW:308.3, HBD:1, HBA:4, type:0,
     route:[{site:'위',ph:1.5},{site:'소장',ph:6.5},{site:'혈액',ph:7.4},{site:'간',ph:7.0}]},
   {name:'Methotrexate', logP:-1.85, pKa1:4.7, pKa2:null, MW:454.4, HBD:5, HBA:12, type:0,
@@ -231,7 +231,7 @@ function buildRoute(admin, target) {
 
   // 경구+대장은 혈액 대신 대장으로
   if (admin === 'oral' && target === 'colon') {
-    return [{site:'위',ph:1.5},{site:'소장',ph:6.5},{site:'대장',ph:6.5}];
+    return [{site:'위',ph:1.5},{site:'소장',ph:6.5},{site:'대장',ph:6.8}];
   }
 
   return [...base, ...(targetMap[target] || [])];
@@ -382,10 +382,33 @@ function calcLogD(logP, pKa1, pKa2, type, ph) {
   return logP;
 }
 
-function calcIon(pKa1, type, ph) {
-  if (type == 0) return (1 / (1 + Math.pow(10, -(ph - pKa1)))) * 100;
-  if (type == 1) return (1 / (1 + Math.pow(10, ph - pKa1))) * 100;
-  return 50;
+/**
+ * 이온화율(%) 계산.
+ *
+ * logD 계산에 쓰는 분모 S와 동일한 항으로 유도하므로 두 값이 항상 일치한다.
+ *   S        = 1 + (이온화종/중성종 농도비의 합)
+ *   logD     = logP - log10(S)
+ *   이온화율 = (1 - 1/S) * 100
+ *
+ * type 0 = 산성, 1 = 염기성, 2 = 양쪽성
+ * 기존 구현은 양쪽성(type 2)에서 pH와 무관하게 50을 반환하여,
+ * 위(pH 1.5)와 소장(pH 6.5)의 이온화율이 동일하게 출력되는 오류가 있었다.
+ */
+function calcIon(pKa1, pKa2, type, ph) {
+  let S;
+  if (type == 0) {
+    // HA ⇌ A⁻ + H⁺ : pH > pKa 에서 이온화 우세
+    S = 1 + Math.pow(10, ph - pKa1);
+  } else if (type == 1) {
+    // B + H⁺ ⇌ BH⁺ : pH < pKa 에서 이온화 우세
+    S = 1 + Math.pow(10, pKa1 - ph);
+  } else if (type == 2) {
+    // 양쪽성: 산성기 탈양성자화와 염기성기 양성자화를 동시에 고려
+    S = 1 + Math.pow(10, ph - pKa1) + Math.pow(10, (pKa2 || pKa1) - ph);
+  } else {
+    return 0;
+  }
+  return (1 - 1 / S) * 100;  // 중성 분율(1/S)의 여집합
 }
 
 function scoreLogD(ld) {
@@ -465,7 +488,7 @@ function runPredict() {
   tbody.innerHTML = '';
   activeRoute.forEach((r, idx) => {
     const ld = calcLogD(logP, pKa1, pKa2, type, r.ph);
-    const ion = calcIon(pKa1, type, r.ph);
+    const ion = calcIon(pKa1, pKa2, type, r.ph);
     const p = perm(ld);
     const isTarget = idx === activeRoute.length - 1;
     const tr = document.createElement('tr');
@@ -474,7 +497,7 @@ function runPredict() {
       <td>${r.ph.toFixed(1)}</td>
       <td style="color:#888780">${logP.toFixed(2)}</td>
       <td style="font-weight:500">${ld.toFixed(2)}</td>
-      <td>${ion.toFixed(1)}%</td>
+      <td>${(ion > 99 || (ion < 1 && ion > 0) ? ion.toFixed(2) : ion.toFixed(1))}%</td>
       <td><span class="badge ${p.cls}">${p.label}</span></td>
     `;
     tbody.appendChild(tr);
