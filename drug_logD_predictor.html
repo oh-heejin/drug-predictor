@@ -337,9 +337,17 @@ async function fetchDrug() {
   document.getElementById('fetchedSection').style.display = 'none';
 
   try {
-    // SMILES 포함해서 한 번에 가져오기
-    const apiUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/${encodeURIComponent(query)}/property/MolecularWeight,XLogP,HBondDonorCount,HBondAcceptorCount,IsomericSMILES/JSON`;
-    const propRes = await fetch(apiUrl);
+    // PubChem PUG REST는 구조 표기 속성명을 변경하였다.
+    // 현재: SMILES / ConnectivitySMILES
+    // 과거: IsomericSMILES / CanonicalSMILES
+    // 서버 변경에 영향받지 않도록 모두 요청하고, 응답에서 순서대로 탐색한다.
+    const apiUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/${encodeURIComponent(query)}/property/MolecularWeight,XLogP,HBondDonorCount,HBondAcceptorCount,SMILES,ConnectivitySMILES/JSON`;
+    let propRes = await fetch(apiUrl);
+    if (!propRes.ok) {
+      // 구 속성명만 지원하는 서버를 위한 폴백
+      const legacyUrl = `https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/${encodeURIComponent(query)}/property/MolecularWeight,XLogP,HBondDonorCount,HBondAcceptorCount,IsomericSMILES,CanonicalSMILES/JSON`;
+      propRes = await fetch(legacyUrl);
+    }
     if (!propRes.ok) throw new Error('약물을 찾을 수 없습니다. 영문 이름으로 다시 시도해보세요.');
     const propData = await propRes.json();
     if (!propData || !propData.PropertyTable || !propData.PropertyTable.Properties || propData.PropertyTable.Properties.length === 0) {
@@ -348,7 +356,8 @@ async function fetchDrug() {
     const props = propData.PropertyTable.Properties[0];
 
     // SMILES로 약물 분류 자동 판단
-    const smiles = props.IsomericSMILES || '';
+    const smiles = props.SMILES || props.IsomericSMILES
+                || props.ConnectivitySMILES || props.CanonicalSMILES || '';
     const autoType = classifyFromSmiles(smiles);
 
     currentDrug = {
