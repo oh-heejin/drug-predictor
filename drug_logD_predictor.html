@@ -107,7 +107,7 @@ tr:last-child td { border-bottom: none; }
           <select id="adminRoute" onchange="updateRoutePreview()">
             <option value="oral">경구</option>
             <option value="iv">정맥 주사</option>
-            <option value="topical">경피</option>
+            <option value="topical">피부 국소 도포</option>
             <option value="eye">점안액</option>
           </select>
         </div>
@@ -144,7 +144,7 @@ tr:last-child td { border-bottom: none; }
     <div>
       <div style="font-size:12px;color:#888780;margin-bottom:6px;">약물 흡수 경향 점수</div>
       <div class="score-bar-wrap"><div class="score-bar" id="scoreBar"></div></div>
-      <div style="display:flex;justify-content:space-between;font-size:11px;color:#888780;"><span>0%</span><span>50%</span><span>100%</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#888780;"><span>0점</span><span>50점</span><span>100점</span></div>
       <div class="verdict" id="verdict"></div>
     </div>
   </div>
@@ -187,19 +187,20 @@ const PRESETS = [
   {name:'Methotrexate', logP:-1.8, pKa1:4.7, pKa2:null, MW:454.4, HBD:5, HBA:12, type:0,
     route:[{site:'혈액',ph:7.4},{site:'종양',ph:6.5}]},
   {name:'Propranolol', logP:3.0, pKa1:9.42, pKa2:null, MW:259.3, HBD:2, HBA:3, type:1,
-    route:[{site:'위',ph:1.5},{site:'소장상부',ph:6.5},{site:'소장하부',ph:7.6},{site:'간문맥',ph:7.4},{site:'혈액',ph:7.4}]},
+    route:[{site:'위',ph:1.5},{site:'소장',ph:6.5},{site:'혈액',ph:7.4}]},
   {name:'Diphenhydramine', logP:3.3, pKa1:8.98, pKa2:null, MW:255.4, HBD:1, HBA:2, type:1,
     route:[{site:'위',ph:1.5},{site:'소장',ph:6.5},{site:'혈액',ph:7.4},{site:'뇌',ph:7.3}]},
   {name:'Lidocaine', logP:2.3, pKa1:8.01, pKa2:null, MW:234.3, HBD:1, HBA:2, type:1,
-    route:[{site:'위',ph:1.5},{site:'소장',ph:6.5},{site:'문맥',ph:7.4},{site:'간',ph:7.2}]},
+    // 3.1 표 기준: 피부 국소 도포 / 표적 말초신경(감각신경 말단이 분포하는 진피)
+    route:[{site:'피부표면',ph:4.5},{site:'표피',ph:5.5},{site:'진피',ph:7.2}]},
   {name:'Timolol', logP:1.8, pKa1:9.2, pKa2:null, MW:316.4, HBD:3, HBA:5, type:1,
-    route:[{site:'점안액',ph:7.0},{site:'눈물층',ph:7.4},{site:'각막',ph:7.4}]},
+    route:[{site:'눈물층',ph:7.4},{site:'각막',ph:7.4}]},
   {name:'Amphetamine', logP:1.8, pKa1:9.9, pKa2:null, MW:135.2, HBD:2, HBA:1, type:1,
-    route:[{site:'위',ph:1.5},{site:'소장상부',ph:6.5},{site:'소장하부',ph:7.6},{site:'혈액',ph:7.4},{site:'뇌',ph:7.3}]},
+    route:[{site:'위',ph:1.5},{site:'소장',ph:6.5},{site:'혈액',ph:7.4},{site:'뇌',ph:7.3}]},
   {name:'Imipramine', logP:4.8, pKa1:9.4, pKa2:null, MW:280.4, HBD:0, HBA:1, type:1,
-    route:[{site:'위',ph:1.5},{site:'소장상부',ph:6.5},{site:'소장하부',ph:7.6},{site:'혈액',ph:7.4},{site:'뇌',ph:7.3}]},
+    route:[{site:'위',ph:1.5},{site:'소장',ph:6.5},{site:'혈액',ph:7.4},{site:'뇌',ph:7.3}]},
   {name:'Chloroquine', logP:4.6, pKa1:10.16, pKa2:8.08, MW:319.9, HBD:1, HBA:3, type:4,
-    route:[{site:'위',ph:1.5},{site:'소장상부',ph:6.5},{site:'소장하부',ph:7.6},{site:'혈액',ph:7.4},{site:'리소좀',ph:4.8}]},
+    route:[{site:'위',ph:1.5},{site:'소장',ph:6.5},{site:'혈액',ph:7.4},{site:'리소좀',ph:4.8}]},
 ];
 
 // 새 약물 기본 경로 (경구 투여 기준)
@@ -216,7 +217,7 @@ function buildRoute(admin, target) {
     return [{site:'피부표면',ph:4.5},{site:'표피',ph:5.5},{site:'진피',ph:7.2}];
   }
   if (admin === 'eye') {
-    return [{site:'점안액',ph:7.0},{site:'눈물층',ph:7.4},{site:'각막',ph:7.4}];
+    return [{site:'눈물층',ph:7.4},{site:'각막',ph:7.4}];  // 제형 pH가 아닌 신체 부위만 사용
   }
 
   const base = admin === 'iv' ? iv_base : oral_base;
@@ -563,9 +564,9 @@ function runPredict() {
   bar.style.background = score >= 70 ? '#378ADD' : score >= 40 ? '#EF9F27' : '#E24B4A';
 
   const v = document.getElementById('verdict');
-  if (score >= 70) { v.style.color='#185FA5'; v.textContent=`가능성 점수: ${score}% — 흡수 경향 양호`; }
-  else if (score >= 40) { v.style.color='#854F0B'; v.textContent=`가능성 점수: ${score}% — 부분적 흡수 가능`; }
-  else { v.style.color='#A32D2D'; v.textContent=`가능성 점수: ${score}% — 흡수 경향 불량`; }
+  if (score >= 70) { v.style.color='#185FA5'; v.textContent=`약물 흡수 경향 점수: ${score}점 — 흡수 경향 양호`; }
+  else if (score >= 40) { v.style.color='#854F0B'; v.textContent=`약물 흡수 경향 점수: ${score}점 — 부분적 흡수 가능`; }
+  else { v.style.color='#A32D2D'; v.textContent=`약물 흡수 경향 점수: ${score}점 — 흡수 경향 불량`; }
 
   // 약물별 투여 경로: 프리셋은 고유 경로, 검색 약물은 투여방법+표적 조합
   let activeRoute;
